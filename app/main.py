@@ -7,7 +7,7 @@ from app.api.v1.endpoints import auth
 load_dotenv()
 
 app = FastAPI(
-    title=os.getenv("PROJECT_NAME", "Registration API"),
+    title=os.getenv("PROJECT_NAME", "Notes App API"),
     version=os.getenv("VERSION", "1.0.0"),
     openapi_url=f"{os.getenv('API_V1_STR', '/api/v1')}/openapi.json"
 )

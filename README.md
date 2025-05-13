@@ -4,10 +4,10 @@ This is a FastAPI-based authentication API with MySQL database integration. It p
 
 ## Setup
 
-1. Create a MySQL database named `registration_db`:
+1. Create a MySQL database named `notes_app_db`:
 
 ```sql
-CREATE DATABASE registration_db;
+CREATE DATABASE notes_app_db;
 ```
 
 2. Install Poetry (if you haven't already):
@@ -25,7 +25,7 @@ poetry install
 4. Update the database connection string in `database.py` with your MySQL credentials:
 
 ```python
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://username:password@localhost/registration_db"
+SQLALCHEMY_DATABASE_URL = "mysql+pymysql://username:password@localhost/notes_app_db"
 ```
 
 5. Update the `SECRET_KEY` in `main.py` with a secure secret key.
