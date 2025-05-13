@@ -11,6 +11,7 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
     is_active: bool
+    profile_picture: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -20,4 +21,14 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    username: Optional[str] = None 
+    username: Optional[str] = None
+
+# Google OAuth related schemas
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+class OAuthUserCreate(BaseModel):
+    email: str
+    username: str
+    google_id: str
+    profile_picture: Optional[str] = None 

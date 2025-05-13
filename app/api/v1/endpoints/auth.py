@@ -8,11 +8,12 @@ from dotenv import load_dotenv
 from sqlalchemy import or_
 import logging
 from typing import Optional
+import requests
 
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token, TokenData
+from app.schemas.user import UserCreate, UserResponse, Token, TokenData, GoogleAuthRequest, OAuthUserCreate
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -141,6 +142,223 @@ async def nextauth_callback(request: Request, db: Session = Depends(get_db)):
         }
     except Exception as e:
         logger.error(f"NextAuth callback error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed"
+        )
+
+# Google OAuth endpoints for NextAuth
+@router.post("/google/verify")
+async def verify_google_token(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Verify Google ID token and return user info."""
+    try:
+        # Verify token with Google
+        google_oauth_url = "https://www.googleapis.com/oauth2/v3/tokeninfo"
+        params = {"id_token": auth_request.token}
+        response = requests.get(google_oauth_url, params=params)
+        
+        if response.status_code != 200:
+            logger.error(f"Google token verification failed: {response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Google token"
+            )
+        
+        token_info = response.json()
+        
+        # Check if user with this Google ID already exists
+        google_id = token_info.get("sub")
+        email = token_info.get("email")
+        
+        user = db.query(User).filter(
+            or_(
+                User.google_id == google_id,
+                User.email == email
+            )
+        ).first()
+        
+        if not user:
+            # Create new user if not exists
+            username = email.split("@")[0]  # Use part before @ as username
+            base_username = username
+            
+            # Check if username exists, append numbers if needed
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = User(
+                email=email,
+                username=username,
+                google_id=google_id,
+                profile_picture=token_info.get("picture"),
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.google_id:
+            # Update existing email user with Google ID
+            user.google_id = google_id
+            user.profile_picture = token_info.get("picture")
+            db.commit()
+            db.refresh(user)
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")))
+        access_token = create_access_token(
+            data={"sub": user.username}, expires_delta=access_token_expires
+        )
+        
+        return {
+            "id": str(user.id),
+            "name": user.username,
+            "email": user.email,
+            "picture": user.profile_picture,
+            "accessToken": access_token
+        }
+        
+    except Exception as e:
+        logger.error(f"Google authentication error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google authentication failed"
+        )
+
+@router.post("/nextauth/callback/google")
+async def nextauth_google_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle NextAuth Google callback."""
+    try:
+        # Log the raw request data for debugging
+        request_body = await request.body()
+        logger.info(f"NextAuth Google callback received raw data: {request_body}")
+        
+        data = await request.json()
+        logger.info(f"NextAuth Google callback received parsed data: {data}")
+        
+        # Extract Google profile data sent by NextAuth
+        # Handle different data structures that NextAuth might send
+        if isinstance(data, dict):
+            # Direct data
+            google_id = data.get("id") or data.get("sub")
+            email = data.get("email")
+            name = data.get("name")
+            picture = data.get("picture") or data.get("image")
+        elif hasattr(data, "get"):
+            # If data has a get method
+            google_id = data.get("id") or data.get("sub")
+            email = data.get("email")
+            name = data.get("name")
+            picture = data.get("picture") or data.get("image")
+        else:
+            # Try to access as object properties
+            google_id = getattr(data, "id", None) or getattr(data, "sub", None)
+            email = getattr(data, "email", None)
+            name = getattr(data, "name", None)
+            picture = getattr(data, "picture", None) or getattr(data, "image", None)
+        
+        # Look for nested objects like data.user or data.account
+        if hasattr(data, "user") and not google_id:
+            user_data = data.user
+            google_id = getattr(user_data, "id", None) or getattr(user_data, "sub", None)
+            email = getattr(user_data, "email", email)
+            name = getattr(user_data, "name", name)
+            picture = getattr(user_data, "picture", picture) or getattr(user_data, "image", picture)
+        
+        if isinstance(data, dict) and "user" in data and not google_id:
+            user_data = data["user"]
+            google_id = user_data.get("id") or user_data.get("sub") or google_id
+            email = user_data.get("email") or email
+            name = user_data.get("name") or name
+            picture = user_data.get("picture") or user_data.get("image") or picture
+        
+        # If we have account data with providerAccountId
+        if isinstance(data, dict) and "account" in data:
+            account_data = data["account"]
+            google_id = account_data.get("providerAccountId") or account_data.get("id") or google_id
+        
+        # For NextAuth specific structure
+        if isinstance(data, dict) and "profile" in data:
+            profile = data["profile"]
+            google_id = profile.get("sub") or profile.get("id") or google_id
+            email = profile.get("email") or email
+            name = profile.get("name") or name
+            picture = profile.get("picture") or profile.get("image") or picture
+        
+        logger.info(f"Extracted Google auth data: id={google_id}, email={email}, name={name}")
+        
+        if not google_id or not email:
+            logger.error("Missing required fields: Google ID or email")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google ID and email are required"
+            )
+        
+        # Check if user exists
+        user = db.query(User).filter(
+            or_(
+                User.google_id == google_id,
+                User.email == email
+            )
+        ).first()
+        
+        if not user:
+            # Create new user
+            logger.info(f"Creating new user for Google account: {email}")
+            username = email.split("@")[0]  # Use part before @ as username
+            base_username = username
+            
+            # Check if username exists, append numbers if needed
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = User(
+                email=email,
+                username=username,
+                google_id=google_id,
+                profile_picture=picture,
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            logger.info(f"Created new user with ID: {user.id}, username: {user.username}")
+        elif not user.google_id:
+            # Update existing email user with Google ID
+            logger.info(f"Updating existing user with Google ID: {user.id}, {user.username}")
+            user.google_id = google_id
+            user.profile_picture = picture
+            db.commit()
+            db.refresh(user)
+            logger.info("User updated with Google ID")
+        else:
+            logger.info(f"User already exists: {user.id}, {user.username}")
+        
+        # Create access token
+        logger.info("Generating access token")
+        access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")))
+        access_token = create_access_token(
+            data={"sub": user.username}, expires_delta=access_token_expires
+        )
+        
+        response_data = {
+            "id": str(user.id),
+            "name": user.username,
+            "email": user.email,
+            "picture": user.profile_picture,
+            "accessToken": access_token
+        }
+        logger.info(f"Successful Google authentication for: {user.username}")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"NextAuth Google callback error: {str(e)}")
+        # Log the full exception details including traceback
+        import traceback
+        logger.error(f"Full exception details: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication failed"
