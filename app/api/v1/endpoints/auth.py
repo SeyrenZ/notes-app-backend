@@ -194,7 +194,8 @@ async def verify_google_token(auth_request: GoogleAuthRequest, db: Session = Dep
                 google_id=google_id,
                 profile_picture=token_info.get("picture"),
                 is_active=True,
-                preferred_theme="light"
+                preferred_theme="light",
+                preferred_font="sans-serif"
             )
             db.add(user)
             db.commit()
@@ -322,7 +323,8 @@ async def nextauth_google_callback(request: Request, db: Session = Depends(get_d
                 google_id=google_id,
                 profile_picture=picture,
                 is_active=True,
-                preferred_theme="light"
+                preferred_theme="light",
+                preferred_font="sans-serif"
             )
             db.add(user)
             db.commit()

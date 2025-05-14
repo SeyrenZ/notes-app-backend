@@ -5,6 +5,7 @@ class UserBase(BaseModel):
     email: str
     username: str
     preferred_theme: Optional[str] = "light"
+    preferred_font: Optional[str] = "sans-serif"
 
 class UserCreate(UserBase):
     password: str
@@ -19,6 +20,7 @@ class UserResponse(UserBase):
 
 class UserUpdate(BaseModel):
     preferred_theme: Optional[str] = None
+    preferred_font: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -39,4 +41,5 @@ class OAuthUserCreate(BaseModel):
     username: str
     google_id: str
     profile_picture: Optional[str] = None
-    preferred_theme: Optional[str] = "light" 
+    preferred_theme: Optional[str] = "light"
+    preferred_font: Optional[str] = "sans-serif" 

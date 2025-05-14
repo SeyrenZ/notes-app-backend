@@ -16,6 +16,7 @@ class User(Base):
     
     # User preferences
     preferred_theme = Column(String(50), nullable=True, default="light")
+    preferred_font = Column(String(50), nullable=True, default="sans-serif")
     
     # OAuth related fields
     google_id = Column(String(255), unique=True, nullable=True, index=True)
