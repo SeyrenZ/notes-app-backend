@@ -108,26 +108,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-@router.put("/me/preferences", response_model=UserResponse)
-async def update_user_preferences(
-    preferences: UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update user preferences like theme."""
-    logger.info(f"Updating preferences for user: {current_user.username}")
-    
-    # Update user fields that are provided
-    for field, value in preferences.model_dump(exclude_unset=True).items():
-        if value is not None:  # Only update if a value is provided
-            setattr(current_user, field, value)
-    
-    db.commit()
-    db.refresh(current_user)
-    
-    logger.info(f"Preferences updated for user: {current_user.username}")
-    return current_user
-
 # NextAuth specific endpoints
 @router.post("/nextauth/callback/credentials")
 async def nextauth_callback(request: Request, db: Session = Depends(get_db)):

@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from app.api.v1.endpoints import auth
 from app.api.v1.endpoints import notes
+from app.api.v1.endpoints import users
 
 load_dotenv()
 
@@ -25,3 +26,4 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/auth", tags=["auth"]) 
 app.include_router(notes.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/notes", tags=["notes"]) 
+app.include_router(users.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/users", tags=["users"]) 
