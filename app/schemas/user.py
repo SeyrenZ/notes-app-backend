@@ -14,6 +14,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     profile_picture: Optional[str] = None
+    is_oauth_user: bool = False
 
     class Config:
         from_attributes = True
@@ -24,6 +25,10 @@ class UserUpdate(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
 
 class Token(BaseModel):
     access_token: str

@@ -16,7 +16,9 @@ router = APIRouter()
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information."""
-    return current_user
+    response = UserResponse.model_validate(current_user)
+    response.is_oauth_user = bool(current_user.google_id)
+    return response
 
 @router.put("/me/preferences", response_model=UserResponse)
 async def update_user_preferences(
@@ -36,4 +38,6 @@ async def update_user_preferences(
     db.refresh(current_user)
     
     logger.info(f"Preferences updated for user: {current_user.username}")
-    return current_user 
+    response = UserResponse.model_validate(current_user)
+    response.is_oauth_user = bool(current_user.google_id)
+    return response 

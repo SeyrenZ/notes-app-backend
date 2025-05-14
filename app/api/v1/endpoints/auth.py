@@ -13,7 +13,7 @@ import requests
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token, TokenData, GoogleAuthRequest, OAuthUserCreate, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, Token, TokenData, GoogleAuthRequest, OAuthUserCreate, UserUpdate, PasswordChange
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -106,7 +106,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    response = UserResponse.model_validate(current_user)
+    response.is_oauth_user = bool(current_user.google_id)
+    return response
 
 # NextAuth specific endpoints
 @router.post("/nextauth/callback/credentials")
@@ -218,7 +220,8 @@ async def verify_google_token(auth_request: GoogleAuthRequest, db: Session = Dep
             "name": user.username,
             "email": user.email,
             "picture": user.profile_picture,
-            "accessToken": access_token
+            "accessToken": access_token,
+            "is_oauth_user": True
         }
         
     except Exception as e:
@@ -353,7 +356,8 @@ async def nextauth_google_callback(request: Request, db: Session = Depends(get_d
             "name": user.username,
             "email": user.email,
             "picture": user.profile_picture,
-            "accessToken": access_token
+            "accessToken": access_token,
+            "is_oauth_user": True
         }
         logger.info(f"Successful Google authentication for: {user.username}")
         return response_data
@@ -366,4 +370,41 @@ async def nextauth_google_callback(request: Request, db: Session = Depends(get_d
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication failed"
-        ) 
+        )
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change user password. Requires authentication.
+    """
+    logger.info(f"Password change attempt for user: {current_user.username}")
+    
+    # Handle OAuth users without password
+    if not current_user.hashed_password:
+        logger.warning(f"Password change failed: OAuth user without password: {current_user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth users cannot change their password"
+        )
+    
+    # Verify current password
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        logger.warning(f"Password change failed: Invalid current password for user: {current_user.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect current password"
+        )
+    
+    # Hash and set new password
+    hashed_password = get_password_hash(password_data.new_password)
+    current_user.hashed_password = hashed_password
+    
+    # Commit changes to database
+    db.commit()
+    
+    logger.info(f"Password successfully changed for user: {current_user.username}")
+    return {"message": "Password changed successfully"} 
