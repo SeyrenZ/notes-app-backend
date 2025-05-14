@@ -14,6 +14,9 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True)  # Nullable for OAuth users
     is_active = Column(Boolean, default=True)
     
+    # User preferences
+    preferred_theme = Column(String(50), nullable=True, default="light")
+    
     # OAuth related fields
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     profile_picture = Column(String(512), nullable=True)

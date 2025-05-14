@@ -23,5 +23,5 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/auth", tags=["auth"])
+app.include_router(auth.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/auth", tags=["auth"]) 
 app.include_router(notes.router, prefix=f"{os.getenv('API_V1_STR', '/api/v1')}/notes", tags=["notes"]) 

@@ -13,7 +13,7 @@ import requests
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token, TokenData, GoogleAuthRequest, OAuthUserCreate
+from app.schemas.user import UserCreate, UserResponse, Token, TokenData, GoogleAuthRequest, OAuthUserCreate, UserUpdate
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -108,6 +108,26 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.put("/me/preferences", response_model=UserResponse)
+async def update_user_preferences(
+    preferences: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update user preferences like theme."""
+    logger.info(f"Updating preferences for user: {current_user.username}")
+    
+    # Update user fields that are provided
+    for field, value in preferences.model_dump(exclude_unset=True).items():
+        if value is not None:  # Only update if a value is provided
+            setattr(current_user, field, value)
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    logger.info(f"Preferences updated for user: {current_user.username}")
+    return current_user
+
 # NextAuth specific endpoints
 @router.post("/nextauth/callback/credentials")
 async def nextauth_callback(request: Request, db: Session = Depends(get_db)):
@@ -193,7 +213,8 @@ async def verify_google_token(auth_request: GoogleAuthRequest, db: Session = Dep
                 username=username,
                 google_id=google_id,
                 profile_picture=token_info.get("picture"),
-                is_active=True
+                is_active=True,
+                preferred_theme="light"
             )
             db.add(user)
             db.commit()
@@ -320,7 +341,8 @@ async def nextauth_google_callback(request: Request, db: Session = Depends(get_d
                 username=username,
                 google_id=google_id,
                 profile_picture=picture,
-                is_active=True
+                is_active=True,
+                preferred_theme="light"
             )
             db.add(user)
             db.commit()

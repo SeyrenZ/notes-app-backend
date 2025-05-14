@@ -4,6 +4,7 @@ from typing import Optional
 class UserBase(BaseModel):
     email: str
     username: str
+    preferred_theme: Optional[str] = "light"
 
 class UserCreate(UserBase):
     password: str
@@ -12,6 +13,12 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     profile_picture: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    preferred_theme: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -31,4 +38,5 @@ class OAuthUserCreate(BaseModel):
     email: str
     username: str
     google_id: str
-    profile_picture: Optional[str] = None 
+    profile_picture: Optional[str] = None
+    preferred_theme: Optional[str] = "light" 
